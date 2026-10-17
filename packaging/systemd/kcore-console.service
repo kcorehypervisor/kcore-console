@@ -18,8 +18,9 @@ Conflicts=getty@tty1.service
 [Service]
 Type=simple
 Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
-# --product hypervisor is the default. Use --product vault on a backup host.
-ExecStart=/usr/bin/kcore-console --tty /dev/tty1 --product hypervisor
+# Omit --product to read /etc/kcore-type (`kcore-vault` is the backup appliance).
+# An explicit --product wins over that file.
+ExecStart=/usr/bin/kcore-console --tty /dev/tty1
 Restart=always
 RestartSec=2
 StandardInput=tty

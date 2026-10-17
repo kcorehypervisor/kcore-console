@@ -9,10 +9,11 @@ pub mod ui;
 mod tty;
 
 use std::io::{self, stdout};
+use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -20,9 +21,12 @@ use crossterm::terminal::{
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use crate::app::{AppState, Page};
+use crate::app::{Action, AppState};
 use crate::inventory::load_snapshot;
 use crate::product::Product;
+
+/// Seconds between automatic inventory refreshes.
+pub const REFRESH_SECS: u64 = 5;
 
 /// CLI options (also used from tests).
 #[derive(Debug, Clone, Default)]
@@ -30,7 +34,8 @@ pub struct Options {
     pub dev: bool,
     /// When set, make this path the controlling TTY (dup2 on Unix).
     pub tty: Option<String>,
-    pub product: Product,
+    /// `None` reads `/etc/kcore-type` (`kcore-vault` selects the backup appliance).
+    pub product: Option<Product>,
 }
 
 /// Main event loop. Returns `Ok(())` on clean exit (dev only) or `Err` on I/O errors.
@@ -43,7 +48,7 @@ pub fn run(opts: Options) -> io::Result<()> {
     enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, crossterm::cursor::Hide)?;
 
-    install_panic_hook(!opts.dev);
+    install_panic_hook();
 
     if !opts.dev {
         let _ = ctrlc::set_handler(|| {
@@ -51,24 +56,23 @@ pub fn run(opts: Options) -> io::Result<()> {
         });
     }
 
+    let (product, _source) = Product::resolve(opts.product, Path::new(crate::product::TYPE_FILE));
+
     let (refresh_tx, refresh_rx) = mpsc::channel::<()>();
     let (snapshot_tx, snapshot_rx) = mpsc::channel();
-    let product = opts.product;
     let _inventory_worker = std::thread::spawn(move || loop {
         let snapshot = load_snapshot(product);
         if snapshot_tx.send(snapshot).is_err() {
             break;
         }
 
-        match refresh_rx.recv_timeout(Duration::from_secs(5)) {
+        match refresh_rx.recv_timeout(Duration::from_secs(REFRESH_SECS)) {
             Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     });
 
     let mut app = AppState::new(opts.dev, crate::inventory::Snapshot::default());
-    app.clamp_network_selection();
-    app.clamp_storage_selection();
     // Never print diagnostics onto the managed TTY after attach — they overwrite the TUI.
     if opts.dev && opts.tty.is_none() {
         eprintln!("[kcore-console] dev mode: q quits, Ctrl+C exits (best effort)");
@@ -78,84 +82,23 @@ pub fn run(opts: Options) -> io::Result<()> {
     terminal.clear()?;
     loop {
         while let Ok(snapshot) = snapshot_rx.try_recv() {
-            app.snapshot = snapshot;
-            app.clamp_network_selection();
-            app.clamp_storage_selection();
+            let now = chrono::Local::now().format("%H:%M:%S").to_string();
+            app.apply_snapshot(snapshot, now);
         }
 
-        terminal.draw(|f| {
-            use crate::ui::draw;
-            draw(f, &app);
-        })?;
+        terminal.draw(|f| ui::draw(f, &mut app))?;
 
         if event::poll(Duration::from_millis(200))? {
             match event::read()? {
                 // SIGWINCH / terminal resize: next loop iteration redraws with new area.
                 Event::Resize(_, _) => {}
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    if key.code == KeyCode::Char('c')
-                        && key
-                            .modifiers
-                            .contains(crossterm::event::KeyModifiers::CONTROL)
-                    {
-                        if opts.dev {
-                            break;
-                        }
-                    } else {
-                        match key.code {
-                            KeyCode::Char('q') | KeyCode::Char('Q') if opts.dev => {
-                                break;
-                            }
-                            KeyCode::Char('r') | KeyCode::Char('R') => {
-                                let _ = refresh_tx.send(());
-                            }
-                            KeyCode::Tab | KeyCode::Right => {
-                                app.page = app.page.next();
-                            }
-                            KeyCode::BackTab | KeyCode::Left => {
-                                app.page = app.page.prev();
-                            }
-                            KeyCode::Char('1') => app.page = Page::Overview,
-                            KeyCode::Char('2') => app.page = Page::Network,
-                            KeyCode::Char('3') => app.page = Page::Storage,
-                            KeyCode::Char('4') => app.page = Page::Diagnostics,
-                            KeyCode::Char('5') => app.page = Page::Help,
-                            KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::Char('H') => {
-                                app.page = Page::Help;
-                            }
-                            KeyCode::Esc => {
-                                app.page = Page::Overview;
-                            }
-                            KeyCode::Down => {
-                                if app.page == Page::Network {
-                                    let n = app.snapshot.nics.len();
-                                    if n > 0 {
-                                        app.network_sel = (app.network_sel + 1) % n;
-                                    }
-                                } else if app.page == Page::Storage {
-                                    let n = app.snapshot.disks.len();
-                                    if n > 0 {
-                                        app.storage_sel = (app.storage_sel + 1) % n;
-                                    }
-                                }
-                            }
-                            KeyCode::Up => {
-                                if app.page == Page::Network {
-                                    let n = app.snapshot.nics.len();
-                                    if n > 0 {
-                                        app.network_sel = (app.network_sel + n - 1) % n;
-                                    }
-                                } else if app.page == Page::Storage {
-                                    let n = app.snapshot.disks.len();
-                                    if n > 0 {
-                                        app.storage_sel = (app.storage_sel + n - 1) % n;
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
+                Event::Key(key) if key.kind == KeyEventKind::Press => match app.handle_key(key) {
+                    Action::Quit => break,
+                    Action::Refresh => {
+                        let _ = refresh_tx.send(());
                     }
-                }
+                    Action::None => {}
+                },
                 _ => {}
             }
         }
@@ -170,7 +113,7 @@ pub fn run(opts: Options) -> io::Result<()> {
     Ok(())
 }
 
-fn install_panic_hook(_production: bool) {
+fn install_panic_hook() {
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();

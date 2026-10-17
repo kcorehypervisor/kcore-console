@@ -19,9 +19,10 @@ struct Cli {
     /// Attach to this TTY (dup2 stdin/out/err). Typical: /dev/tty1 under systemd.
     #[arg(long, value_name = "PATH")]
     tty: Option<String>,
-    /// Appliance this screen describes.
-    #[arg(long, value_enum, env = "KCORE_CONSOLE_PRODUCT", default_value_t = Product::Hypervisor)]
-    product: Product,
+    /// Appliance this screen describes. Omit to read `/etc/kcore-type`
+    /// (`kcore-vault` selects the backup appliance; anything else is a hypervisor node).
+    #[arg(long, value_enum, env = "KCORE_CONSOLE_PRODUCT")]
+    product: Option<Product>,
 }
 
 fn main() {

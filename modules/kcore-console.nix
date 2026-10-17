@@ -50,6 +50,10 @@ in
     systemd.services."serial-getty@ttyS0".enable = lib.mkForce false;
     systemd.services."serial-getty@hvc0".enable = lib.mkForce false;
 
+    # The binary reads this file when `--product` is not passed.
+    # `kcore-vault` selects the backup appliance; anything else is a hypervisor node.
+    environment.etc."kcore-type".text = if cfg.product == "vault" then "kcore-vault\n" else "kcore\n";
+
     systemd.services.kcore-console = {
       description = "kcore appliance console (${cfg.product})";
       after = [
@@ -67,7 +71,7 @@ in
         Type = "simple";
         Restart = "always";
         RestartSec = "2s";
-        ExecStart = "${cfg.package}/bin/kcore-console --tty ${cfg.tty} --product ${cfg.product}";
+        ExecStart = "${cfg.package}/bin/kcore-console --tty ${cfg.tty}";
         User = "root";
         Group = "root";
         Environment = "PATH=${
