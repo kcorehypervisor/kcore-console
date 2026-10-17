@@ -93,7 +93,7 @@ fn draw_brand(f: &mut Frame<'_>, area: Rect, app: &AppState) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            "  HYPERVISOR",
+            format!("  {}", m.kind.brand_word()),
             Style::default().fg(theme::accent()).bg(theme::bg()),
         ),
         Span::styled(

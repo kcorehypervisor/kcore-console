@@ -209,7 +209,9 @@ pub fn load_meta(api: &ApiStatus, product: Product) -> Meta {
 
     let local_time = Local::now().format("%Y-%m-%d %H:%M:%S (local)").to_string();
 
-    let remote = if product == Product::Vault {
+    let remote = if let Some(hint) = env("KCORE_REMOTE_HINT") {
+        hint
+    } else if product == Product::Vault {
         if management_url == "—" {
             product.remote_hint_fallback().to_string()
         } else {

@@ -21,6 +21,14 @@ impl Product {
         }
     }
 
+    /// Short word in the console brand line.
+    pub fn brand_word(self) -> &'static str {
+        match self {
+            Self::Hypervisor => "HYPERVISOR",
+            Self::Vault => "VAULT",
+        }
+    }
+
     pub fn api_port(self) -> u16 {
         match self {
             Self::Hypervisor => 9091,
@@ -97,6 +105,8 @@ mod tests {
     fn products_probe_different_units() {
         assert_eq!(Product::Hypervisor.label(), "kcore hypervisor");
         assert_eq!(Product::Vault.label(), "kcore vault");
+        assert_eq!(Product::Hypervisor.brand_word(), "HYPERVISOR");
+        assert_eq!(Product::Vault.brand_word(), "VAULT");
         assert_eq!(Product::Hypervisor.api_port(), 9091);
         assert_eq!(Product::Vault.api_port(), 9191);
         assert!(Product::Vault
