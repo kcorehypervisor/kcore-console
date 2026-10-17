@@ -5,6 +5,8 @@ use std::process::Command;
 #[derive(Debug, Clone, Default)]
 pub struct ServiceLine {
     pub name: String,
+    /// systemd unit, e.g. `kcore-node-agent.service`.
+    pub unit: String,
     pub status: String,
 }
 
@@ -28,6 +30,7 @@ pub fn kcore_diagnostics(units: &[(&str, &str)]) -> Vec<ServiceLine> {
         };
         v.push(ServiceLine {
             name: (*label).to_string(),
+            unit: (*unit).to_string(),
             status,
         });
     }
