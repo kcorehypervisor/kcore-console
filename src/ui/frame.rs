@@ -11,7 +11,16 @@ use crate::theme;
 use super::{diagnostics, footer, gpu, header, help, network, overview, security, storage};
 
 pub fn draw(f: &mut Frame<'_>, app: &mut AppState) {
-    let area = f.area();
+    let full = f.area();
+    // The Linux VT scrolls the whole screen when a glyph is written in the last
+    // column of the last row, and wraps when anything is written in the last
+    // column. Leave that cell alone so journal lines cannot smear over the cards.
+    let area = Rect {
+        x: full.x,
+        y: full.y,
+        width: full.width.saturating_sub(1),
+        height: full.height.saturating_sub(1),
+    };
     f.render_widget(Block::default().style(theme::base()), area);
 
     let header_h = header::height_for(area.height);

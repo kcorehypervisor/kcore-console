@@ -49,22 +49,22 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &mut AppState) {
     let wide = table_area.width >= 100;
     let widths = if wide {
         vec![
-            Constraint::Length(10),
-            Constraint::Length(18),
+            Constraint::Length(3),
+            Constraint::Length(12),
+            Constraint::Length(20),
             Constraint::Fill(1),
-            Constraint::Length(6),
         ]
     } else {
         vec![
-            Constraint::Length(16),
+            Constraint::Length(3),
+            Constraint::Length(18),
             Constraint::Fill(1),
-            Constraint::Length(6),
         ]
     };
     let header = if wide {
-        Row::new(["Group", "Check", "Value", ""].map(Cell::from))
+        Row::new(["", "Group", "Check", "Value"].map(Cell::from))
     } else {
-        Row::new(["Check", "Value", ""].map(Cell::from))
+        Row::new(["", "Check", "Value"].map(Cell::from))
     };
     let rows: Vec<Row> = if app.snapshot.security.is_empty() {
         vec![Row::new(vec![Cell::from(Span::styled(
@@ -120,7 +120,7 @@ fn summary_line(app: &AppState) -> Line<'static> {
         Span::styled("  ", theme::base()),
         count_chip(s.bad, "fail", theme::bad()),
         Span::styled("  ", theme::base()),
-        count_chip(s.info, "info", theme::muted()),
+        count_chip(s.info, "info", theme::text()),
     ])
 }
 
@@ -140,16 +140,16 @@ fn check_row(c: &Check, wide: bool, show_group: bool) -> Row<'static> {
     let name = Span::styled(c.name.to_string(), theme::strong());
     let cells: Vec<Cell> = if wide {
         vec![
+            Cell::from(mark),
             Cell::from(Span::styled(
                 if show_group { c.group } else { "" },
                 theme::label(),
             )),
             Cell::from(name),
             Cell::from(value),
-            Cell::from(mark),
         ]
     } else {
-        vec![Cell::from(name), Cell::from(value), Cell::from(mark)]
+        vec![Cell::from(mark), Cell::from(name), Cell::from(value)]
     };
     Row::new(cells).height(1)
 }

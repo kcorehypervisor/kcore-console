@@ -36,7 +36,7 @@ pub fn load_snapshot(product: Product) -> Snapshot {
     let gpus = gpu::list_gpus();
     let security = security::security_checks();
     let diag = diagnostics::kcore_diagnostics(product.units());
-    let logs = logs::recent_system_logs(80);
+    let logs = logs::recent_system_logs(200);
     let repository = vault::repository_status();
     let meta = system::load_meta(&api, product);
     Snapshot {

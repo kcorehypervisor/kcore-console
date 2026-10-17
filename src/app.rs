@@ -107,8 +107,10 @@ pub struct AppState {
     pub storage: TableState,
     pub gpu: TableState,
     pub security: TableState,
-    /// Lines scrolled back from the newest system-log line.
-    pub log_scroll: usize,
+    /// Highlighted system-log line. `0` is the oldest line kept in the snapshot.
+    pub log_cursor: usize,
+    /// When set, a new snapshot keeps the highlight on the newest line.
+    pub log_follow: bool,
     /// Wall-clock label of the last applied snapshot, `None` before the first one.
     pub last_refresh: Option<String>,
     /// Set after `r` until the next snapshot arrives.
@@ -126,7 +128,8 @@ impl AppState {
             storage: TableState::default(),
             gpu: TableState::default(),
             security: TableState::default(),
-            log_scroll: 0,
+            log_cursor: 0,
+            log_follow: true,
             last_refresh: None,
             refreshing: false,
             last_msg: None,
@@ -162,9 +165,14 @@ impl AppState {
         clamp_table(&mut self.storage, self.snapshot.disks.len());
         clamp_table(&mut self.gpu, self.snapshot.gpus.len());
         clamp_table(&mut self.security, self.snapshot.security.len());
-        self.log_scroll = self
-            .log_scroll
-            .min(self.snapshot.logs.len().saturating_sub(1));
+        let len = self.snapshot.logs.len();
+        if len == 0 {
+            self.log_cursor = 0;
+            self.log_follow = true;
+        } else if self.log_follow || self.log_cursor >= len {
+            self.log_cursor = len - 1;
+            self.log_follow = true;
+        }
     }
 
     /// Keyboard dispatch. Pure state transition; the loop acts on the returned [`Action`].
@@ -233,6 +241,19 @@ impl AppState {
         }
     }
 
+    /// Move the system-log highlight. Up is towards older lines.
+    fn move_log(&mut self, delta: isize) {
+        let len = self.snapshot.logs.len();
+        if len == 0 {
+            self.log_cursor = 0;
+            self.log_follow = true;
+            return;
+        }
+        let next = (self.log_cursor as isize + delta).clamp(0, len as isize - 1) as usize;
+        self.log_cursor = next;
+        self.log_follow = next + 1 == len;
+    }
+
     /// Move the current page's cursor by `delta` rows. Single steps wrap; pages clamp.
     fn step(&mut self, delta: isize) {
         match self.page {
@@ -240,12 +261,7 @@ impl AppState {
             Page::Storage => step_table(&mut self.storage, self.snapshot.disks.len(), delta),
             Page::Gpu => step_table(&mut self.gpu, self.snapshot.gpus.len(), delta),
             Page::Security => step_table(&mut self.security, self.snapshot.security.len(), delta),
-            Page::Overview => {
-                let max = self.snapshot.logs.len().saturating_sub(1);
-                // Up (negative) scrolls back in time, which increases the offset.
-                let next = self.log_scroll as isize - delta;
-                self.log_scroll = next.clamp(0, max as isize) as usize;
-            }
+            Page::Overview => self.move_log(delta),
             Page::Diagnostics | Page::Help => {}
         }
     }
@@ -257,11 +273,17 @@ impl AppState {
             Page::Gpu => jump_table(&mut self.gpu, self.snapshot.gpus.len(), first),
             Page::Security => jump_table(&mut self.security, self.snapshot.security.len(), first),
             Page::Overview => {
-                self.log_scroll = if first {
-                    self.snapshot.logs.len().saturating_sub(1)
+                let len = self.snapshot.logs.len();
+                if len == 0 {
+                    self.log_cursor = 0;
+                    self.log_follow = true;
+                } else if first {
+                    self.log_cursor = 0;
+                    self.log_follow = false;
                 } else {
-                    0
-                };
+                    self.log_cursor = len - 1;
+                    self.log_follow = true;
+                }
             }
             Page::Diagnostics | Page::Help => {}
         }
@@ -409,17 +431,22 @@ mod tests {
     #[test]
     fn overview_scrolls_the_log() {
         let mut s = with_rows();
-        assert_eq!(s.log_scroll, 0);
+        assert_eq!(s.log_cursor, 29, "opens on the newest line");
+        assert!(s.log_follow);
         s.handle_key(key(KeyCode::Up));
-        assert_eq!(s.log_scroll, 1);
+        assert_eq!(s.log_cursor, 28);
+        assert!(!s.log_follow);
         s.handle_key(key(KeyCode::PageUp));
-        assert_eq!(s.log_scroll, 11);
+        assert_eq!(s.log_cursor, 18);
         s.handle_key(key(KeyCode::Char('g')));
-        assert_eq!(s.log_scroll, 29);
+        assert_eq!(s.log_cursor, 0);
         s.handle_key(key(KeyCode::Down));
-        assert_eq!(s.log_scroll, 28);
+        assert_eq!(s.log_cursor, 1);
         s.handle_key(key(KeyCode::Char('G')));
-        assert_eq!(s.log_scroll, 0);
+        assert_eq!(s.log_cursor, 29);
+        assert!(s.log_follow);
+        s.handle_key(key(KeyCode::Down));
+        assert_eq!(s.log_cursor, 29, "down stays on the newest line");
     }
 
     #[test]

@@ -29,6 +29,8 @@ pub struct Meta {
     pub api_status: ApiStatus,
     pub cluster_name: String,
     pub node_role: String,
+    /// Data-center id from the node agent or controller config, such as `DC1`.
+    pub dc_id: String,
     pub health: Health,
     pub local_login: &'static str,
     pub remote_hint: String,
@@ -54,6 +56,7 @@ impl Default for Meta {
             api_status: ApiStatus::Unavailable,
             cluster_name: "—".to_string(),
             node_role: "—".to_string(),
+            dc_id: "—".to_string(),
             health: Health::Unknown,
             local_login: "disabled",
             remote_hint: "kcorectl login https://<node-ip>:8443".to_string(),
@@ -83,6 +86,52 @@ impl std::fmt::Display for Health {
 
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|s| !s.is_empty())
+}
+
+/// `clusterName = "kcore-prod";` assignments, in file order, without duplicates.
+pub(crate) fn cluster_names_from_nix(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in text.lines() {
+        let code = line.split('#').next().unwrap_or("");
+        let Some(rest) = code.trim().strip_prefix("clusterName") else {
+            continue;
+        };
+        let rest = rest.trim();
+        let Some(rest) = rest.strip_prefix('=') else {
+            continue;
+        };
+        let name = rest
+            .trim()
+            .trim_end_matches(';')
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'');
+        if !name.is_empty() && !names.iter().any(|n| n == name) {
+            names.push(name.to_string());
+        }
+    }
+    names
+}
+
+fn yaml_value(path: &str, key: &str) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| yaml_scalar(&text, key))
+}
+
+/// First `key: "value"` scalar in a small YAML config. Quoted or bare.
+pub(crate) fn yaml_scalar(text: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}:");
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix(&prefix) else {
+            continue;
+        };
+        let value = rest.trim().trim_matches('"').trim_matches('\'');
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 fn file_first_line(p: &str) -> Option<String> {
@@ -180,10 +229,28 @@ pub fn load_meta(api: &ApiStatus, product: Product) -> Meta {
 
     let cluster_name = env("KCORE_CLUSTER_NAME")
         .or_else(|| file_first_line("/etc/kcore/cluster_name"))
+        .or_else(|| {
+            std::fs::read_to_string("/etc/nixos/kcore-kubernetes.nix")
+                .ok()
+                .and_then(|text| {
+                    let names = cluster_names_from_nix(&text);
+                    if names.is_empty() {
+                        None
+                    } else {
+                        Some(names.join(", "))
+                    }
+                })
+        })
         .unwrap_or_else(|| "—".to_string());
 
     let node_role = env("KCORE_NODE_ROLE")
         .or_else(|| file_first_line("/etc/kcore/node_role"))
+        .unwrap_or_else(|| "—".to_string());
+
+    let dc_id = env("KCORE_DC_ID")
+        .or_else(|| file_first_line("/etc/kcore/dc_id"))
+        .or_else(|| yaml_value("/etc/kcore/node-agent.yaml", "dcId"))
+        .or_else(|| yaml_value("/etc/kcore/controller.yaml", "dcId"))
         .unwrap_or_else(|| "—".to_string());
 
     let management_url = if let Some(u) = env("KCORE_MANAGEMENT_URL") {
@@ -243,8 +310,36 @@ pub fn load_meta(api: &ApiStatus, product: Product) -> Meta {
         api_status: api.clone(),
         cluster_name,
         node_role,
+        dc_id,
         health,
         local_login: "disabled",
         remote_hint: remote,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cluster_names_from_nix, yaml_scalar};
+
+    #[test]
+    fn nix_cluster_names_keep_file_order() {
+        let text = r#"
+          clusterName = "kcore-prod";
+          # clusterName = "ignored";
+          additionalClusters."kcore-b" = {
+            clusterName = "kcore-b";
+          };
+          clusterName = "kcore-prod";
+        "#;
+        assert_eq!(
+            cluster_names_from_nix(text),
+            vec!["kcore-prod".to_string(), "kcore-b".to_string()]
+        );
+    }
+
+    #[test]
+    fn yaml_dc_id_reads_a_quoted_scalar() {
+        let text = "replication:\n  dcId: \"DC1\"\n";
+        assert_eq!(yaml_scalar(text, "dcId").as_deref(), Some("DC1"));
     }
 }

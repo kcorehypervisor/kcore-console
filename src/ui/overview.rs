@@ -71,7 +71,7 @@ fn node_card(app: &AppState) -> Paragraph<'static> {
     Paragraph::new(vec![
         kv_text("Node", 10, m.hostname.clone()),
         kv_text("Cluster", 10, m.cluster_name.clone()),
-        kv_text("Role", 10, m.node_role.clone()),
+        kv_text("DC", 10, m.dc_id.clone()),
         kv_text("Version", 10, m.version.clone()),
         kv_text("Build", 10, m.build_id.clone()),
         kv_text("Uptime", 10, m.uptime_str.clone()),
@@ -107,11 +107,6 @@ fn access_card(app: &AppState) -> Paragraph<'static> {
     let m = &app.snapshot.meta;
     Paragraph::new(vec![
         kv_text("Manage", 8, m.management_url.clone()),
-        Line::from(Span::styled("Remote", theme::label())),
-        Line::from(Span::styled(
-            m.remote_hint.clone(),
-            theme::value().fg(theme::accent()),
-        )),
         kv(
             "Login",
             8,
@@ -135,8 +130,8 @@ fn status_card(app: &AppState, _width: u16) -> Paragraph<'static> {
         Line::from(vec![
             Span::styled(format!("{:<10}", "Node"), theme::label()),
             Span::styled(m.hostname.clone(), theme::strong()),
-            Span::styled(format!("   {}", m.node_role), theme::value()),
-            Span::styled(format!("   {}", m.cluster_name), theme::label()),
+            Span::styled(format!("   {}", m.cluster_name), theme::value()),
+            Span::styled(format!("   {}", m.dc_id), theme::label()),
         ]),
         kv_text(
             "Version",
@@ -153,11 +148,6 @@ fn status_card(app: &AppState, _width: u16) -> Paragraph<'static> {
             Span::styled(api_word, Style::default().fg(api_color)),
         ]),
         kv_text("Manage", 10, m.management_url.clone()),
-        kv(
-            "Remote",
-            10,
-            Span::styled(m.remote_hint.clone(), theme::value().fg(theme::accent())),
-        ),
         kv(
             "Login",
             10,
@@ -237,47 +227,104 @@ fn service_summary(app: &AppState) -> Span<'static> {
     };
     Span::styled(
         format!("{healthy}/{} healthy", diag.len()),
-        Style::default().fg(color),
+        Style::default()
+            .fg(color)
+            .add_modifier(ratatui::style::Modifier::BOLD),
     )
 }
 
 fn draw_log(f: &mut Frame<'_>, area: Rect, app: &AppState) {
     let logs = &app.snapshot.logs;
-    let inner = area.height.saturating_sub(2) as usize;
-    let (first, last) = window(logs.len(), inner, app.log_scroll);
+    let inner_h = area.height.saturating_sub(2) as usize;
+    // Borders plus one column of horizontal padding on each side, and the scrollbar.
+    let inner_w = area.width.saturating_sub(5) as usize;
+    let cursor = if logs.is_empty() {
+        0
+    } else {
+        app.log_cursor.min(logs.len() - 1)
+    };
+    let (first, last) = log_window(logs.len(), inner_h.max(1), cursor);
     let lines: Vec<Line> = if logs.is_empty() {
         vec![Line::from(Span::styled(
             "No recent journal lines.",
             theme::label(),
         ))]
     } else {
-        logs[first..last].iter().map(log_line).collect()
+        logs[first..last]
+            .iter()
+            .enumerate()
+            .map(|(i, line)| log_line(line, inner_w, first + i == cursor))
+            .collect()
+    };
+    let title = if logs.is_empty() {
+        "System log".to_string()
+    } else {
+        format!(
+            "System log  {}-{} of {}   up/down",
+            first + 1,
+            last,
+            logs.len()
+        )
     };
     f.render_widget(
         Paragraph::new(lines)
-            .block(card("System log"))
+            .block(card(&title))
+            .wrap(Wrap { trim: false })
             .style(theme::panel()),
         area,
     );
-    scrollbar(f, area, logs.len(), inner, first);
+    scrollbar(f, area, logs.len(), inner_h.max(1), first);
 }
 
-fn window(total: usize, visible: usize, scroll: usize) -> (usize, usize) {
+/// Window that keeps `cursor` on screen, with the cursor on the bottom row when following the tail.
+fn log_window(total: usize, visible: usize, cursor: usize) -> (usize, usize) {
     let visible = visible.max(1);
-    let first = total.saturating_sub(visible.saturating_add(scroll));
-    let last = (first + visible).min(total);
-    (first, last)
+    if total == 0 {
+        return (0, 0);
+    }
+    let cursor = cursor.min(total - 1);
+    if total <= visible {
+        return (0, total);
+    }
+    let first = cursor
+        .saturating_add(1)
+        .saturating_sub(visible)
+        .min(total - visible);
+    (first, first + visible)
 }
 
-fn log_line(line: &LogLine) -> Line<'static> {
-    let text = &line.text;
+fn log_line(line: &LogLine, width: usize, selected: bool) -> Line<'static> {
+    let text = fit_width(&line.text, width);
+    if selected {
+        return Line::from(Span::styled(text, theme::row_selected()));
+    }
     match text.split_once(' ') {
         Some((ts, rest)) if ts.contains('T') && ts.len() >= 20 => Line::from(vec![
             Span::styled(ts.to_string(), theme::label()),
             Span::styled(format!(" {rest}"), message_style(rest)),
         ]),
-        _ => Line::from(Span::styled(text.clone(), message_style(text))),
+        _ => Line::from(Span::styled(text, message_style(&line.text))),
     }
+}
+
+/// One screen row. Control characters and anything past `width` are dropped so a
+/// journal line cannot wrap out of the system-log box.
+fn fit_width(text: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    let mut out = String::new();
+    for ch in text.chars() {
+        if out.chars().count() + 1 >= width && text.chars().count() > width {
+            out.push('…');
+            break;
+        }
+        out.push(if ch.is_control() { ' ' } else { ch });
+        if out.chars().count() == width {
+            break;
+        }
+    }
+    out
 }
 
 fn message_style(text: &str) -> Style {

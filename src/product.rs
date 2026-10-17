@@ -123,7 +123,7 @@ impl Product {
     pub fn help_notes(self) -> &'static [&'static str] {
         match self {
             Self::Hypervisor => &[
-                "This display is read-only. Administer the node with kcorectl and the management URL from a trusted machine.",
+                "This display is read-only. Open the management URL from a trusted machine.",
                 "Reboot, shutdown, and a root shell are intentionally unavailable here.",
                 "Network: IPv4 is never truncated. IPv6 shows the first global address and +N when more exist; the Detail card lists them all. Bridge members show as iface -> br0.",
                 "GPU: devices bound to vfio-pci are reserved for VM passthrough. The IOMMU group must be isolated for safe passthrough.",

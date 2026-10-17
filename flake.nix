@@ -19,7 +19,7 @@
           pkgs = nixpkgs.legacyPackages.${system};
           kcore-console = pkgs.rustPlatform.buildRustPackage {
             pname = "kcore-console";
-            version = "0.6.0";
+            version = "0.6.1";
             src = ./.;
             cargoLock.lockFile = ./Cargo.lock;
             KCORE_GIT_REV = self.shortRev or self.dirtyShortRev or "dev";

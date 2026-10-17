@@ -78,6 +78,9 @@ pub fn run(opts: Options) -> io::Result<()> {
         eprintln!("[kcore-console] dev mode: q quits, Ctrl+C exits (best effort)");
     }
 
+    // Kernel warnings on tty1 scroll the framebuffer and smear the TUI.
+    let _quiet_console = opts.tty.as_ref().map(|_| ConsoleQuiet::engage());
+
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     terminal.clear()?;
     loop {
@@ -111,6 +114,35 @@ pub fn run(opts: Options) -> io::Result<()> {
     )?;
     disable_raw_mode()?;
     Ok(())
+}
+
+/// Drops the kernel console loglevel to 1 while the appliance TUI owns the VT.
+struct ConsoleQuiet {
+    previous: Option<String>,
+}
+
+impl ConsoleQuiet {
+    fn engage() -> Self {
+        let path = "/proc/sys/kernel/printk";
+        let previous = std::fs::read_to_string(path).ok();
+        if let Some(prev) = &previous {
+            let mut parts = prev.split_whitespace();
+            if let (Some(_), Some(b), Some(c), Some(d)) =
+                (parts.next(), parts.next(), parts.next(), parts.next())
+            {
+                let _ = std::fs::write(path, format!("1 {b} {c} {d}\n"));
+            }
+        }
+        Self { previous }
+    }
+}
+
+impl Drop for ConsoleQuiet {
+    fn drop(&mut self) {
+        if let Some(prev) = self.previous.take() {
+            let _ = std::fs::write("/proc/sys/kernel/printk", prev);
+        }
+    }
 }
 
 fn install_panic_hook() {

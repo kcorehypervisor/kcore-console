@@ -16,11 +16,7 @@ use crate::theme;
 pub fn card(title: &str) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
-        .border_style(
-            Style::default()
-                .fg(theme::accent_dim())
-                .bg(theme::panel_bg()),
-        )
+        .border_style(Style::default().fg(theme::accent()).bg(theme::panel_bg()))
         .title(Line::from(vec![
             Span::styled(" ", Style::default().fg(theme::accent_dim())),
             Span::styled(title.to_string(), theme::title_style()),
@@ -116,14 +112,22 @@ pub fn scrollbar(f: &mut Frame<'_>, area: Rect, total: usize, visible: usize, po
         .end_symbol(Some("▼"))
         .track_symbol(Some("│"))
         .thumb_symbol("█")
-        .track_style(
+        .track_style(Style::default().fg(theme::accent()).bg(theme::panel_bg()))
+        .thumb_style(
             Style::default()
-                .fg(theme::accent_dim())
+                .fg(ratatui::style::Color::Yellow)
                 .bg(theme::panel_bg()),
         )
-        .thumb_style(Style::default().fg(theme::accent()).bg(theme::panel_bg()))
-        .begin_style(Style::default().fg(theme::muted()).bg(theme::panel_bg()))
-        .end_style(Style::default().fg(theme::muted()).bg(theme::panel_bg()));
+        .begin_style(
+            Style::default()
+                .fg(ratatui::style::Color::Yellow)
+                .bg(theme::panel_bg()),
+        )
+        .end_style(
+            Style::default()
+                .fg(ratatui::style::Color::Yellow)
+                .bg(theme::panel_bg()),
+        );
     f.render_stateful_widget(bar, area, &mut state);
 }
 

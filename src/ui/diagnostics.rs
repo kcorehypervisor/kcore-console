@@ -20,9 +20,9 @@ pub fn draw(f: &mut Frame<'_>, area: ratatui::layout::Rect, app: &AppState) {
     let widths = if wide {
         vec![
             Constraint::Length(3),
-            Constraint::Length(24),
+            Constraint::Length(22),
+            Constraint::Length(16),
             Constraint::Fill(1),
-            Constraint::Length(28),
         ]
     } else {
         vec![
@@ -32,7 +32,7 @@ pub fn draw(f: &mut Frame<'_>, area: ratatui::layout::Rect, app: &AppState) {
         ]
     };
     let header = if wide {
-        Row::new(["", "Service", "Unit", "Status"].map(Cell::from))
+        Row::new(["", "Service", "Status", "Unit"].map(Cell::from))
     } else {
         Row::new(["", "Service", "Status"].map(Cell::from))
     };
@@ -99,8 +99,8 @@ fn api_row(status: &ApiStatus, endpoint: &str, wide: bool) -> Row<'static> {
         vec![
             Cell::from(dot),
             Cell::from(name),
-            Cell::from(endpoint.to_string()),
             status_cell,
+            Cell::from(endpoint.to_string()),
         ]
     } else {
         vec![Cell::from(dot), Cell::from(name), status_cell]
@@ -114,8 +114,8 @@ fn service_row(s: &ServiceLine, wide: bool) -> Row<'static> {
         vec![
             Cell::from(Span::styled("●", Style::default().fg(color))),
             Cell::from(Span::styled(s.name.clone(), theme::strong())),
-            Cell::from(Span::styled(s.unit.clone(), theme::label())),
             Cell::from(Span::styled(s.status.clone(), Style::default().fg(color))),
+            Cell::from(Span::styled(s.unit.clone(), theme::label())),
         ]
     } else {
         vec![
