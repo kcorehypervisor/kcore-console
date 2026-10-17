@@ -35,7 +35,7 @@ fn keys_panel() -> Paragraph<'static> {
         row("Tab", "next page"),
         row("Shift+Tab", "previous page"),
         row("← →", "previous / next page"),
-        row("↑ ↓", "move the selection, or scroll the log"),
+        row("↑ ↓", "move the selection, or move through the log"),
         row("j k", "same as the arrow keys"),
         row("PgUp PgDn", "move by ten rows"),
         row("Home End", "first or last row"),

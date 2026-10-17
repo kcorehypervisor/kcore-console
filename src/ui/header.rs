@@ -68,11 +68,11 @@ fn identity(app: &AppState, width: u16, rows: u16) -> Vec<Line<'static>> {
 
     if rows >= 2 {
         let mut host = vec![Span::styled(m.hostname.clone(), theme::strong())];
-        let place = match (m.cluster_name.as_str(), m.node_role.as_str()) {
+        let place = match (m.cluster_name.as_str(), m.dc_id.as_str()) {
             ("—", "—") | ("", "") => String::new(),
-            ("—", role) => format!("  {role}"),
+            ("—", dc) => format!("  {dc}"),
             (cluster, "—") => format!("  {cluster}"),
-            (cluster, role) => format!("  {cluster} · {role}"),
+            (cluster, dc) => format!("  {cluster} · {dc}"),
         };
         if !place.is_empty() && width as usize > m.hostname.len() + place.len() {
             host.push(Span::styled(place, theme::label()));

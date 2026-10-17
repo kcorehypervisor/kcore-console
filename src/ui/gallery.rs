@@ -41,6 +41,7 @@ fn sample_snapshot(kind: Product) -> Snapshot {
         local_time: "2026-10-10 20:00:00".into(),
         cluster_name: "garage".into(),
         node_role: "compute".into(),
+        dc_id: "DC1".into(),
         health: Health::Ok,
         management_url: "https://192.168.40.103:8443".into(),
         api_endpoint: "192.168.40.103:9091".into(),
@@ -256,7 +257,14 @@ fn overview_splits_status_and_system_log() {
     assert!(buffer_contains_on_one_line(&buf, "System log"));
     assert!(buffer_contains_on_one_line(&buf, "node-103"));
     assert!(buffer_contains_on_one_line(&buf, "heartbeat ok"));
+    assert!(buffer_contains_on_one_line(&buf, "DC1"));
+    assert!(buffer_contains_on_one_line(&buf, "garage"));
     let plain = buffer_plain(&buf);
+    assert!(
+        !plain.contains("kcorectl"),
+        "login hint stays off the overview"
+    );
+    assert!(!plain.contains("compute"), "role row is not shown");
     let status_at = plain.find("Node status").expect("status");
     let log_at = plain.find("System log").expect("log");
     assert!(status_at < log_at, "status panel above system log");
@@ -354,6 +362,31 @@ fn gpu_page_shows_passthrough_and_host_devices() {
     assert!(plain.contains("vfio-pci"), "{plain}");
     assert!(plain.contains("amdgpu"), "{plain}");
     write_visual("gpu-128x48", &buf);
+}
+
+#[test]
+fn wide_linux_console_does_not_draw_the_last_cell() {
+    let buf = render(Page::Overview, 240, 67, Product::Hypervisor);
+    let w = buf.area.width;
+    let h = buf.area.height;
+    for y in 0..h {
+        assert_eq!(
+            buf[(w - 1, y)].symbol(),
+            " ",
+            "last column must stay blank at row {y}"
+        );
+    }
+    for x in 0..w {
+        assert_eq!(
+            buf[(x, h - 1)].symbol(),
+            " ",
+            "last row must stay blank at col {x}"
+        );
+    }
+    let plain = buffer_plain(&buf);
+    assert!(plain.contains("DC1"));
+    assert!(!plain.contains("kcorectl"));
+    write_visual("overview-240x67", &buf);
 }
 
 #[test]

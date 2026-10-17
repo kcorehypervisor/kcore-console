@@ -1,67 +1,68 @@
-//! Color palette aligned with `assets/kcore-logo.png`: black field, violet accent, silver text.
+//! Palette for the Linux console. Named ANSI colors stay bright when the VT
+//! maps them onto its 16-color palette; 24-bit values were collapsing into black.
 
 use ratatui::style::{Color, Modifier, Style};
 
 pub fn bg() -> Color {
-    Color::Rgb(0, 0, 0)
+    Color::Black
 }
 
+/// Bright blue for borders and the logo K. Dark RGB blue was invisible on tty1.
 pub fn accent() -> Color {
-    // Dominant violet from the shipped README / console logo art (sampled from PNG)
-    Color::Rgb(83, 90, 244)
+    Color::LightBlue
 }
 
-/// Dimmer violet for rules, inactive borders, and separators.
+/// Separators. Still a real blue, not a near-black dim.
 pub fn accent_dim() -> Color {
-    Color::Rgb(52, 56, 140)
+    Color::Blue
 }
 
-/// Highlight / metallic tone for wordmarks (logo silver).
+/// Wordmark and emphasised text.
 pub fn silver() -> Color {
-    Color::Rgb(210, 212, 220)
+    Color::White
 }
 
 pub fn text() -> Color {
-    Color::Rgb(228, 230, 235)
+    Color::White
 }
 
 pub fn muted() -> Color {
-    Color::Rgb(118, 120, 132)
+    Color::Cyan
 }
 
-/// Selected row / active tab background.
+/// Selected-row background. Yellow on the console is readable; blue was not.
 pub fn selection_bg() -> Color {
-    Color::Rgb(30, 32, 64)
+    Color::Yellow
 }
 
-/// Slightly elevated panel fill (status cards).
+/// Cards sit on the same black field as the rest of the console.
 pub fn panel_bg() -> Color {
-    Color::Rgb(10, 10, 16)
+    Color::Black
 }
 
-/// Active tab: inverted accent chip so the current page is unmistakable.
+/// Current page: yellow text on black. A blue chip with black text did not read.
 pub fn tab_active() -> Style {
     Style::default()
-        .fg(bg())
-        .bg(accent())
+        .fg(Color::Yellow)
+        .bg(bg())
         .add_modifier(Modifier::BOLD)
 }
 
-/// Inactive tab foreground.
+/// Other pages.
 pub fn tab_inactive() -> Style {
-    Style::default().fg(muted()).bg(bg())
+    Style::default().fg(Color::White).bg(bg())
 }
 
 pub fn good() -> Color {
-    Color::Rgb(80, 200, 120)
+    Color::LightGreen
 }
 
 pub fn warn() -> Color {
-    Color::Rgb(255, 200, 100)
+    Color::Yellow
 }
 
 pub fn bad() -> Color {
-    Color::Rgb(255, 100, 100)
+    Color::LightRed
 }
 
 /// Base style for the background field.
@@ -75,7 +76,9 @@ pub fn panel() -> Style {
 }
 
 pub fn title_style() -> Style {
-    Style::default().fg(accent()).add_modifier(Modifier::BOLD)
+    Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD)
 }
 
 /// Dim label in a key/value row.
@@ -96,8 +99,8 @@ pub fn strong() -> Style {
 /// Keyboard chip in the footer and on the Help page.
 pub fn key_chip() -> Style {
     Style::default()
-        .fg(silver())
-        .bg(selection_bg())
+        .fg(Color::Yellow)
+        .bg(bg())
         .add_modifier(Modifier::BOLD)
 }
 
@@ -112,7 +115,7 @@ pub fn table_header() -> Style {
 /// Highlighted table row.
 pub fn row_selected() -> Style {
     Style::default()
-        .fg(silver())
+        .fg(Color::Black)
         .bg(selection_bg())
         .add_modifier(Modifier::BOLD)
 }
