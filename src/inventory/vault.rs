@@ -50,11 +50,8 @@ impl Repository {
 
     /// 0..=100, or `None` when the size is unknown.
     pub fn used_pct(&self) -> Option<u8> {
-        if self.total == 0 {
-            None
-        } else {
-            Some(((self.used.saturating_mul(100)) / self.total).min(100) as u8)
-        }
+        let pct = self.used.saturating_mul(100).checked_div(self.total)?;
+        Some(pct.min(100) as u8)
     }
 }
 

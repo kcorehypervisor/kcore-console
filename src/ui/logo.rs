@@ -95,16 +95,11 @@ fn render_wordmark(area: Rect, buf: &mut Buffer) {
         .fg(theme::silver())
         .bg(theme::bg())
         .add_modifier(Modifier::BOLD);
-    let mut x = area.x;
-    for (i, ch) in WORDMARK.chars().enumerate() {
-        if x >= area.right() {
-            break;
-        }
+    for (x, (i, ch)) in (area.x..area.right()).zip(WORDMARK.chars().enumerate()) {
         let style = if i == 0 { k } else { rest };
         buf[(x, area.y)]
             .set_symbol(&ch.to_string())
             .set_style(style);
-        x += 1;
     }
 }
 
