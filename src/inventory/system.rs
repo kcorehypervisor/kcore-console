@@ -256,7 +256,11 @@ pub fn load_meta(api: &ApiStatus, product: Product) -> Meta {
     let management_url = if let Some(u) = env("KCORE_MANAGEMENT_URL") {
         u
     } else if product == Product::Vault {
-        "http://127.0.0.1:9190".to_string()
+        if let Some(ip) = primary_ipv4_for_mgmt() {
+            format!("https://{ip}/")
+        } else {
+            "https://<ip>/".to_string()
+        }
     } else if let Some(ip) = primary_ipv4_for_mgmt() {
         let port = env("KCORE_MANAGEMENT_PORT").unwrap_or_else(|| product.management_port().into());
         format!("https://{ip}:{port}")
