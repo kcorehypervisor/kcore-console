@@ -86,7 +86,7 @@ impl Product {
     pub fn management_port(self) -> &'static str {
         match self {
             Self::Hypervisor => "8443",
-            Self::Vault => "9190",
+            Self::Vault => "443",
         }
     }
 
@@ -94,7 +94,7 @@ impl Product {
     pub fn remote_hint_fallback(self) -> &'static str {
         match self {
             Self::Hypervisor => "kcorectl login https://<node-ip>:8443",
-            Self::Vault => "vault dashboard http://127.0.0.1:9190",
+            Self::Vault => "https://<ip>/",
         }
     }
 
